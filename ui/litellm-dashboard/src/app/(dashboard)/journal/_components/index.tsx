@@ -148,6 +148,7 @@ export default function Journal({ accessToken }: Props) {
           <EvaluateDialog
             accessToken={accessToken}
             models={chatModels}
+            evaluations={evaluations}
             target={evalTarget || undefined}
             cell={evalCell}
             onClose={() => {
@@ -433,8 +434,13 @@ export default function Journal({ accessToken }: Props) {
         <EvaluateDialog
           accessToken={accessToken}
           models={chatModels}
+          evaluations={evaluations}
           target={evalTarget || undefined}
-          onClose={() => setShowEval(false)}
+          cell={evalCell}
+          onClose={() => {
+            setShowEval(false);
+            setEvalCell(null);
+          }}
           onDone={loadEvals}
         />
       )}

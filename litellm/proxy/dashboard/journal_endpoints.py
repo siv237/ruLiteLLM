@@ -613,6 +613,55 @@ default_user_id и анонимных); если текстов нет — на�
 3–5 строк: кто чем загружен, повторы и аномалии, заметные изменения."""
 
 
+@router.get("/dashboard/journal/window", tags=["journal"], include_in_schema=False)
+async def get_journal_window(
+    response: Response,
+    days: int = Query(default=1, ge=1, le=_MAX_DAYS),
+    dt_from: str = Query(default="", description="локальное начало «YYYY-MM-DD HH:MM» (Владивосток)"),
+    dt_to: str = Query(default="", description="локальное конец «YYYY-MM-DD HH:MM» (Владивосток)"),
+    model: str = Query(default=""),
+    agent: str = Query(default=""),
+    key: str = Query(default=""),
+    user_api_key_dict: UserAPIKeyAuth = Depends(user_api_key_auth),
+):
+    """Быстрый анализ окна: список запросов (кто/когда/модель/токены/сессия) без LLM."""
+    from litellm.proxy.proxy_server import prisma_client
+
+    if user_api_key_dict.user_role not in _JOURNAL_ALLOWED_ROLES:
+        raise HTTPException(status_code=403, detail={"error": "Журнал доступен только администраторам"})
+    if prisma_client is None:
+        raise HTTPException(status_code=503, detail={"error": "Нет БД"})
+    win, params, nxt = _win_clause('s."startTime"', days, dt_from, dt_to)
+    filt, fparams = _filters(model, agent, key, nxt)
+    sql = (
+        _W_CTE.format(tz=_TZ, win=win)
+        + f"""
+SELECT COALESCE(json_agg(r ORDER BY r.t DESC), '[]') AS data FROM (
+  SELECT to_char(lt, 'YYYY-MM-DD HH24:MI:SS') AS t, u, sid, tok, m, tags
+  FROM w {filt} LIMIT 500
+) r;"""
+    )
+    rows = await _rows(prisma_client, sql, *params, *fparams)
+    names = await _safe_names(prisma_client)
+    out: List[Dict[str, Any]] = []
+    summary: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        tags = r.get("tags") or ""
+        kind = "system" if re.search(_INTERACTIVE_RE, tags, re.I) is None else "human"
+        disp = _disp(r["u"], "", names)
+        out.append({"t": r["t"], "u": r["u"], "display": disp, "kind": kind, "sid": r["sid"], "tok": r["tok"], "m": r["m"]})
+        s = summary.setdefault(r["u"], {"u": r["u"], "display": disp, "kind": kind, "reqs": 0, "tok": 0, "sids": set()})
+        s["reqs"] += 1
+        s["tok"] += int(r["tok"] or 0)
+        if r["sid"]:
+            s["sids"].add(r["sid"])
+    summ = sorted(
+        [{"u": s["u"], "display": s["display"], "kind": s["kind"], "reqs": s["reqs"], "tok": s["tok"], "sess": len(s["sids"])} for s in summary.values()],
+        key=lambda x: -x["reqs"],
+    )
+    return {"rows": out, "summary": summ, "truncated": len(out) >= 500}
+
+
 def _build_digest(
     parts: List[Dict[str, Any]], first: List[Dict[str, Any]], names: Dict[str, str], target_u: str = ""
 ) -> str:

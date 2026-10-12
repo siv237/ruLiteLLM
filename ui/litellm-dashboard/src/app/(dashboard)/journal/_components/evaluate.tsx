@@ -1,12 +1,13 @@
 "use client";
 
 // fork: слой 2 — ручная «оценка периода» (дайджест → один запрос к выбранной модели); период свой или пресет
+// + вкладка «Быстрый анализ» — кто/когда/что запросил в окне (чистый SQL, без LLM)
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { apiClient } from "@/components/networking";
-import { downloadMd, REPORT_PROSE_CLS, type CellT } from "./shared";
+import { downloadMd, fmtKtok, REPORT_PROSE_CLS, type CellT, type EvaluationT } from "./shared";
 
 const LS_MODEL = "journal-eval-model";
 
@@ -22,16 +23,35 @@ function cellRange(c: CellT): { from: string; to: string } {
   return { from: new Date(start).toISOString().slice(0, 16), to: new Date(start + 3600_000).toISOString().slice(0, 16) };
 }
 
+interface WindowRowT {
+  t: string;
+  u: string;
+  display: string;
+  kind: string;
+  sid: string;
+  tok: number;
+  m: string;
+}
+interface WindowSummaryT {
+  u: string;
+  display: string;
+  kind: string;
+  reqs: number;
+  tok: number;
+  sess: number;
+}
+
 interface Props {
   accessToken: string;
   models: string[];
+  evaluations: EvaluationT[];
   onClose: () => void;
   onDone: () => void;
   target?: { u?: string; sid?: string; display?: string };
   cell?: CellT | null;
 }
 
-export default function EvaluateDialog({ accessToken, models, onClose, onDone, target, cell }: Props) {
+export default function EvaluateDialog({ accessToken, models, evaluations, onClose, onDone, target, cell }: Props) {
   const isSession = !!target?.sid;
   const [custom, setCustom] = useState(!!cell && !isSession);
   const [days, setDays] = useState(isSession ? 7 : 1);
@@ -43,6 +63,13 @@ export default function EvaluateDialog({ accessToken, models, onClose, onDone, t
   const [report, setReport] = useState("");
   const [error, setError] = useState("");
   const [meta, setMeta] = useState("");
+  const [tab, setTab] = useState<"quick" | "ai">("quick");
+  const [qRows, setQRows] = useState<WindowRowT[]>([]);
+  const [qSumm, setQSumm] = useState<WindowSummaryT[]>([]);
+  const [qTrunc, setQTrunc] = useState(false);
+  const [qBusy, setQBusy] = useState(false);
+  const [qErr, setQErr] = useState("");
+  const qReq = useRef(0);
 
   useEffect(() => {
     if (model && models.includes(model)) return;
@@ -64,6 +91,69 @@ export default function EvaluateDialog({ accessToken, models, onClose, onDone, t
     }
   }, [cell, isSession]);
 
+  const periodParams = useMemo(() => {
+    const q = new URLSearchParams();
+    if (custom) {
+      q.set("dt_from", from.replace("T", " "));
+      q.set("dt_to", to.replace("T", " "));
+    } else {
+      q.set("days", String(days));
+    }
+    return q.toString();
+  }, [custom, from, to, days]);
+
+  const loadQuick = useCallback(async () => {
+    if (!accessToken) return;
+    const my = ++qReq.current;
+    setQBusy(true);
+    setQErr("");
+    try {
+      const r = await apiClient.get<{ rows: WindowRowT[]; summary: WindowSummaryT[]; truncated: boolean }>(`/dashboard/journal/window?${periodParams}`, { accessToken });
+      if (my !== qReq.current) return;
+      setQRows(r.rows || []);
+      setQSumm(r.summary || []);
+      setQTrunc(!!r.truncated);
+    } catch (e) {
+      if (my !== qReq.current) return;
+      setQErr(String(e instanceof Error ? e.message : e));
+    } finally {
+      if (my === qReq.current) setQBusy(false);
+    }
+  }, [accessToken, periodParams]);
+
+  // быстрый анализ: сразу при открытии и при смене периода (с дебаунсом набора)
+  useEffect(() => {
+    const t = setTimeout(loadQuick, 400);
+    return () => clearTimeout(t);
+  }, [loadQuick]);
+
+  // если ИИ-анализ этого периода уже выполнялся — подставляем его без повтора
+  useEffect(() => {
+    const tu = target?.u || "";
+    const ts = target?.sid || "";
+    const match = evaluations.find(
+      (ev) =>
+        !ev.error &&
+        (ev.targetU || "") === tu &&
+        (ev.targetSid || "") === ts &&
+        (custom ? (ev.periodFrom || "").replace("T", " ") === from.replace("T", " ") && (ev.periodTo || "").replace("T", " ") === to.replace("T", " ") : !ev.periodFrom && ev.periodDays === days),
+    );
+    if (!match) return;
+    let alive = true;
+    apiClient
+      .get<{ report: string; model: string }>(`/dashboard/journal/evaluation?id=${match.id}`, { accessToken })
+      .then((r) => {
+        if (!alive) return;
+        setReport(r.report || "");
+        setMeta(`уже выполнялся: оценка #${match.id} от ${match.created} · модель ${r.model || match.model}`);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const pickModel = (m: string) => {
     setModel(m);
     try {
@@ -81,6 +171,8 @@ export default function EvaluateDialog({ accessToken, models, onClose, onDone, t
     setBusy(true);
     setError("");
     setReport("");
+    setMeta("");
+    setTab("ai");
     try {
       const body = custom
         ? { days: 0, model, u: target?.u || "", sid: target?.sid || "", from: from.replace("T", " "), to: to.replace("T", " ") }
@@ -99,6 +191,9 @@ export default function EvaluateDialog({ accessToken, models, onClose, onDone, t
       setBusy(false);
     }
   };
+
+  const tabCls = (on: boolean) =>
+    `rounded-t border-b-0 px-3 py-1.5 text-xs ${on ? "border-input bg-card font-medium" : "border-transparent text-muted-foreground hover:text-foreground"}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={busy ? undefined : onClose}>
@@ -213,18 +308,78 @@ export default function EvaluateDialog({ accessToken, models, onClose, onDone, t
           )}
         </div>
 
-        {error && <div className="mb-2 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-600 dark:text-red-400">{error}</div>}
-
-        <div className={`${REPORT_PROSE_CLS} min-h-0 flex-1 overflow-y-auto rounded border border-input/50 bg-background p-5`}>
-          {report ? (
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{report}</ReactMarkdown>
-          ) : busy ? (
-            <span className="text-muted-foreground">Модель читает дайджест и пишет отчёт…</span>
-          ) : (
-            <span className="text-muted-foreground">Настройте период и модель и нажмите «Оценить».</span>
-          )}
+        <div className="flex items-end gap-1 border-b border-input">
+          <button className={tabCls(tab === "quick")} onClick={() => setTab("quick")}>
+            Быстрый анализ
+          </button>
+          <button className={tabCls(tab === "ai")} onClick={() => setTab("ai")}>
+            ИИ анализ{report ? " •" : ""}
+          </button>
+          <span className="ml-auto pb-1 text-[10px] text-muted-foreground">{periodTxt}</span>
         </div>
-        {meta && <div className="mt-2 text-[10px] text-muted-foreground">{meta}</div>}
+
+        {tab === "quick" && (
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-b border border-input bg-background p-3">
+            {qErr && <div className="mb-2 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-600 dark:text-red-400">{qErr}</div>}
+            {qBusy && !qRows.length && <div className="text-xs text-muted-foreground">загрузка…</div>}
+            {!qBusy && !qErr && !qRows.length && <div className="text-xs text-muted-foreground">в этом периоде запросов нет.</div>}
+            {!!qSumm.length && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {qSumm.map((s) => (
+                  <span key={s.u} className="rounded border border-input bg-card px-2 py-1 text-[11px]">
+                    {s.display}
+                    {s.kind === "system" ? " [система]" : ""} · {s.reqs} зап. · {fmtKtok(s.tok)} ток.
+                    {s.sess ? ` · ${s.sess} сесс.` : ""}
+                  </span>
+                ))}
+              </div>
+            )}
+            {!!qRows.length && (
+              <table className="w-full border-collapse text-[11px]">
+                <thead>
+                  <tr className="text-left text-muted-foreground">
+                    <th className="sticky top-0 bg-background py-1 pr-3 font-medium">Время</th>
+                    <th className="sticky top-0 bg-background py-1 pr-3 font-medium">Участник</th>
+                    <th className="sticky top-0 bg-background py-1 pr-3 font-medium">Модель</th>
+                    <th className="sticky top-0 bg-background py-1 pr-3 text-right font-medium">Токены</th>
+                    <th className="sticky top-0 bg-background py-1 font-medium">Сессия</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {qRows.map((r, i) => (
+                    <tr key={i} className="border-t border-input/40">
+                      <td className="py-1 pr-3 tabular-nums">{r.t}</td>
+                      <td className="py-1 pr-3">
+                        {r.display}
+                        {r.kind === "system" ? " [система]" : ""}
+                      </td>
+                      <td className="py-1 pr-3">{r.m}</td>
+                      <td className="py-1 pr-3 text-right tabular-nums">{fmtKtok(r.tok)}</td>
+                      <td className="max-w-[160px] truncate py-1 text-muted-foreground" title={r.sid}>
+                        {r.sid}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {qTrunc && <div className="mt-2 text-[10px] text-muted-foreground">показаны последние 500 запросов</div>}
+          </div>
+        )}
+
+        {tab === "ai" && (
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-b border border-input bg-background p-5">
+            {error && <div className="mb-2 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-600 dark:text-red-400">{error}</div>}
+            {report ? (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{report}</ReactMarkdown>
+            ) : busy ? (
+              <span className="text-muted-foreground">Модель читает дайджест и пишет отчёт…</span>
+            ) : (
+              <span className="text-muted-foreground">ИИ-анализ этого периода ещё не выполнялся — нажмите «Оценить».</span>
+            )}
+            {meta && <div className="mt-2 text-[10px] text-muted-foreground">{meta}</div>}
+          </div>
+        )}
       </div>
     </div>
   );
