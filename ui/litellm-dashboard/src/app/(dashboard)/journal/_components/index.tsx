@@ -245,7 +245,7 @@ export default function Journal({ accessToken }: Props) {
             {kpi("Системы", t ? fnum(t.systems) : "…", null, "боты и сервисы")}
             {kpi("Пиковый час", t?.peak_hour != null ? `${String(t.peak_hour).padStart(2, "0")}:00` : "…", null, "максимум запросов по часам")}
           </div>
-          <div className="flex min-h-0 min-w-0 flex-col rounded border border-input bg-card p-3">
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded border border-input bg-card p-3">
             <div className="mb-2 flex items-baseline justify-between gap-2 whitespace-nowrap">
               <span className="text-sm font-medium">Анализ ИИ</span>
               <span className="truncate text-[10px] text-muted-foreground">оценки периодов · клик — читать</span>

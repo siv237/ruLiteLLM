@@ -4,7 +4,7 @@ import { useLogin } from "@/app/(dashboard)/hooks/login/useLogin";
 import { useUIConfig } from "@/app/(dashboard)/hooks/uiConfig/useUIConfig";
 import LoadingScreen from "@/components/common_components/LoadingScreen";
 import { exchangeLoginCode, getProxyBaseUrl, switchToWorkerUrl } from "@/components/networking";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "@/components/shared/Alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/shared/Alert";
 import { PasswordInput } from "@/components/shared/PasswordInput";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { FormField } from "@/components/shared/form/FormField";
@@ -19,7 +19,7 @@ import { useZodForm } from "@/lib/forms/useZodForm";
 import { clearTokenCookies, getCookieFromDocument } from "@/utils/cookieUtils";
 import { isJwtExpired } from "@/utils/jwtUtils";
 import { consumeReturnUrl, getLoginUrl, getReturnUrl, isValidReturnUrl } from "@/utils/returnUrlUtils";
-import { CircleAlert, Info, TriangleAlert, X } from "lucide-react";
+import { CircleAlert, TriangleAlert } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { z } from "zod/v4";
@@ -31,29 +31,6 @@ const loginSchema = z.object({
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
-
-function SsoEnabledNotice() {
-  const [dismissed, setDismissed] = useState(false);
-
-  if (dismissed) {
-    return null;
-  }
-
-  return (
-    <Alert variant="info" className="mt-4">
-      <Info />
-      <AlertTitle>
-        Включён Single Sign-On (SSO). ruLiteLLM больше не перенаправляет на SSO-вход автоматически при открытии страницы. Чтобы вернуть авто-редирект, установите{" "}
-        <code className="bg-muted px-1 py-0.5 rounded-sm text-xs">AUTO_REDIRECT_UI_LOGIN_TO_SSO=true</code> в конфигурации окружения.
-      </AlertTitle>
-      <AlertAction>
-        <Button variant="ghost" size="icon-sm" aria-label="Закрыть" onClick={() => setDismissed(true)}>
-          <X className="size-4" />
-        </Button>
-      </AlertAction>
-    </Alert>
-  );
-}
 
 function LoginPageContent() {
   const [isLoading, setIsLoading] = useState(true);
@@ -234,26 +211,6 @@ function LoginPageContent() {
                 <p className="text-sm text-muted-foreground">Вход в админ-интерфейс ruLiteLLM.</p>
               </div>
 
-              {!uiConfig?.hide_default_credentials_hint && (
-                <Alert variant="info">
-                  <Info />
-                  <AlertTitle>Учётные данные по умолчанию</AlertTitle>
-                  <AlertDescription>
-                    <p className="text-sm">
-                      По умолчанию имя пользователя <code className="bg-muted px-1 py-0.5 rounded-sm text-xs">admin</code> , а пароль — заданный на ruLiteLLM-прокси
-                      <code className="bg-muted px-1 py-0.5 rounded-sm text-xs">MASTER_KEY</code>.
-                    </p>
-                    <p className="mt-2 text-sm">
-                      Нужно настроить учётные данные UI или SSO?{" "}
-                      <a href="https://docs.litellm.ai/docs/proxy/ui" target="_blank" rel="noopener noreferrer">
-                        Смотрите документацию
-                      </a>
-                      .
-                    </p>
-                  </AlertDescription>
-                </Alert>
-              )}
-
               {error && (
                 <Alert variant="error">
                   <CircleAlert />
@@ -352,7 +309,6 @@ function LoginPageContent() {
                 </FieldGroup>
               </form>
             </div>
-            {uiConfig?.sso_configured && <SsoEnabledNotice />}
           </TooltipProvider>
         </CardContent>
       </Card>
