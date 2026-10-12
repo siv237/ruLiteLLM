@@ -31,6 +31,7 @@ interface WindowRowT {
   sid: string;
   tok: number;
   m: string;
+  ka: string;
 }
 interface WindowSummaryT {
   u: string;
@@ -291,7 +292,7 @@ export default function EvaluateDialog({ accessToken, models, evaluations, onClo
             onClick={run}
             disabled={busy || !model || !customOk}
           >
-            {busy ? "генерация ~1 мин…" : "Оценить"}
+            {busy ? "генерация ~1 мин…" : "ИИ анализ"}
           </button>
           {report && !busy && (
             <button
@@ -341,6 +342,7 @@ export default function EvaluateDialog({ accessToken, models, evaluations, onClo
                     <th className="sticky top-0 bg-background py-1 pr-3 font-medium">Время</th>
                     <th className="sticky top-0 bg-background py-1 pr-3 font-medium">Участник</th>
                     <th className="sticky top-0 bg-background py-1 pr-3 font-medium">Модель</th>
+                    <th className="sticky top-0 bg-background py-1 pr-3 font-medium">Ключ</th>
                     <th className="sticky top-0 bg-background py-1 pr-3 text-right font-medium">Токены</th>
                     <th className="sticky top-0 bg-background py-1 font-medium">Сессия</th>
                   </tr>
@@ -354,6 +356,9 @@ export default function EvaluateDialog({ accessToken, models, evaluations, onClo
                         {r.kind === "system" ? " [система]" : ""}
                       </td>
                       <td className="py-1 pr-3">{r.m}</td>
+                      <td className="max-w-[140px] truncate py-1 pr-3" title={r.ka}>
+                        {r.ka}
+                      </td>
                       <td className="py-1 pr-3 text-right tabular-nums">{fmtKtok(r.tok)}</td>
                       <td className="max-w-[160px] truncate py-1 text-muted-foreground" title={r.sid}>
                         {r.sid}
@@ -368,14 +373,14 @@ export default function EvaluateDialog({ accessToken, models, evaluations, onClo
         )}
 
         {tab === "ai" && (
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-b border border-input bg-background p-5">
+          <div className={`${REPORT_PROSE_CLS} min-h-0 flex-1 overflow-y-auto rounded-b border border-input bg-background p-5`}>
             {error && <div className="mb-2 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-600 dark:text-red-400">{error}</div>}
             {report ? (
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{report}</ReactMarkdown>
             ) : busy ? (
               <span className="text-muted-foreground">Модель читает дайджест и пишет отчёт…</span>
             ) : (
-              <span className="text-muted-foreground">ИИ-анализ этого периода ещё не выполнялся — нажмите «Оценить».</span>
+              <span className="text-muted-foreground">ИИ-анализ этого периода ещё не выполнялся — нажмите «ИИ анализ».</span>
             )}
             {meta && <div className="mt-2 text-[10px] text-muted-foreground">{meta}</div>}
           </div>

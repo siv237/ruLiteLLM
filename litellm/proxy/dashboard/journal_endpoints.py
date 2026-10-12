@@ -182,24 +182,27 @@ SELECT COALESCE(json_agg(r ORDER BY r.exch DESC), '[]') AS data FROM (
 
 # первая содержательная реплика сессий (метод из wiki/answers/litellm-request-content-analysis.md)
 _SQL_FIRST: Final = """
-SELECT COALESCE(json_agg(r ORDER BY r.t0 DESC), '[]') AS data FROM (
+SELECT COALESCE(json_agg(r ORDER BY r.t_last DESC), '[]') AS data FROM (
   SELECT um.u, um.sid,
          to_char(um.t0, 'YYYY-MM-DD HH24:MI') AS t0,
+         to_char(um.t_last, 'YYYY-MM-DD HH24:MI') AS t_last,
          um.turns::int AS turns,
-         left(regexp_replace(um.txt, '\\s+', ' ', 'g'), 160) AS txt
+         left(regexp_replace(um.txt, '\\s+', ' ', 'g'), 160) AS txt,
+         left(regexp_replace(am.txt, '\\s+', ' ', 'g'), 220) AS atxt
   FROM (
-    SELECT DISTINCT ON (c.u, c.sid) c.u, c.sid, c.t0, c.turns, c.txt
+    SELECT DISTINCT ON (c.u, c.sid) c.u, c.sid, c.t0, c.t_last, c.turns, c.txt
     FROM (
-      SELECT fr.u, fr.sid, fr.t0, fr.turns, e.ord,
+      SELECT fr.u, fr.sid, fr.t0, fr.t_last, fr.turns, x.ord,
              CASE jsonb_typeof(m -> 'content')
                WHEN 'string' THEN m ->> 'content'
                ELSE (SELECT string_agg(p ->> 'text', ' ')
-                     FROM jsonb_array_elements(m -> 'content') p WHERE p ->> 'type' = 'text')
+                     FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m -> 'content') = 'array' THEN m -> 'content' ELSE '[]'::jsonb END) p WHERE p ->> 'type' = 'text')
              END AS txt
       FROM (
         SELECT DISTINCT ON (COALESCE("user", ''), session_id)
                COALESCE("user", '') AS u, session_id AS sid,
                ("startTime" AT TIME ZONE 'UTC' AT TIME ZONE '{tz}') AS t0,
+               (max("startTime") OVER (PARTITION BY COALESCE("user", ''), session_id) AT TIME ZONE 'UTC' AT TIME ZONE '{tz}') AS t_last,
                count(*) OVER (PARTITION BY COALESCE("user", ''), session_id) AS turns,
                proxy_server_request AS psr
         FROM "LiteLLM_SpendLogs"
@@ -207,13 +210,46 @@ SELECT COALESCE(json_agg(r ORDER BY r.t0 DESC), '[]') AS data FROM (
           AND call_type = 'acompletion' AND proxy_server_request IS NOT NULL
           AND coalesce(session_id, '') <> ''
           AND COALESCE("user", '') <> '{eu}'
-      ) fr,
-      jsonb_array_elements(fr.psr -> 'messages') WITH ORDINALITY e(m, ord)
+        ORDER BY COALESCE("user", ''), session_id, "startTime" ASC
+      ) fr
+      CROSS JOIN LATERAL (
+        SELECT m, ord FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(fr.psr -> 'messages') = 'array' THEN fr.psr -> 'messages' ELSE '[]'::jsonb END
+        ) WITH ORDINALITY e(m, ord)
+      ) x
       WHERE m ->> 'role' = 'user'
     ) c
     WHERE coalesce(c.txt, '') !~ '^\\s*$' AND {txtf}
     ORDER BY c.u, c.sid, c.ord
   ) um
+  LEFT JOIN (
+    SELECT DISTINCT ON (a.u, a.sid) a.u, a.sid, a.txt
+    FROM (
+      SELECT fr2.u, fr2.sid, x2.ord,
+             CASE jsonb_typeof(m2 -> 'content')
+               WHEN 'string' THEN m2 ->> 'content'
+               ELSE (SELECT string_agg(p2 ->> 'text', ' ')
+                     FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m2 -> 'content') = 'array' THEN m2 -> 'content' ELSE '[]'::jsonb END) p2 WHERE p2 ->> 'type' = 'text')
+             END AS txt
+      FROM (
+        SELECT DISTINCT ON (COALESCE("user", ''), session_id)
+               COALESCE("user", '') AS u, session_id AS sid, proxy_server_request AS psr
+        FROM "LiteLLM_SpendLogs"
+        WHERE {win}
+          AND call_type = 'acompletion' AND proxy_server_request IS NOT NULL
+          AND coalesce(session_id, '') <> ''
+          AND COALESCE("user", '') <> '{eu}'
+      ) fr2
+      CROSS JOIN LATERAL (
+        SELECT m2, ord FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(fr2.psr -> 'messages') = 'array' THEN fr2.psr -> 'messages' ELSE '[]'::jsonb END
+        ) WITH ORDINALITY e2(m2, ord)
+      ) x2
+      WHERE m2 ->> 'role' = 'assistant'
+    ) a
+    WHERE coalesce(a.txt, '') !~ '^\\s*$'
+    ORDER BY a.u, a.sid, a.ord DESC
+  ) am ON am.u = um.u AND am.sid = um.sid
 ) r;
 """
 
@@ -313,7 +349,7 @@ async def get_journal_state(
             "u": r["u"],
             "sid": r.get("sid") or "",
             "display": _disp(r["u"], "", names),
-            "t": r["t0"],
+            "t": r.get("t_last") or r["t0"],
             "txt": r["txt"],
             "turns": r["turns"],
         }
@@ -357,7 +393,7 @@ SELECT COALESCE(json_agg(r ORDER BY r.ord), '[]') AS data FROM (
          CASE jsonb_typeof(m -> 'content')
            WHEN 'string' THEN m ->> 'content'
            ELSE (SELECT string_agg(p ->> 'text', chr(10))
-                 FROM jsonb_array_elements(m -> 'content') p WHERE p ->> 'type' = 'text')
+                 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m -> 'content') = 'array' THEN m -> 'content' ELSE '[]'::jsonb END) p WHERE p ->> 'type' = 'text')
          END AS txt
   FROM (
     SELECT proxy_server_request AS psr
@@ -466,7 +502,7 @@ SELECT COALESCE(json_agg(r), '[]') AS data FROM (
            CASE jsonb_typeof(m -> 'content')
              WHEN 'string' THEN m ->> 'content'
              ELSE (SELECT string_agg(p ->> 'text', ' ')
-                   FROM jsonb_array_elements(m -> 'content') p WHERE p ->> 'type' = 'text')
+                   FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m -> 'content') = 'array' THEN m -> 'content' ELSE '[]'::jsonb END) p WHERE p ->> 'type' = 'text')
            END AS txt
     FROM (
       SELECT DISTINCT ON (session_id) session_id AS sid, proxy_server_request AS psr
@@ -596,18 +632,19 @@ CREATE TABLE IF NOT EXISTS "LiteLLM_DGK_ActivitySnapshots" (
 """
 
 _EVAL_PROMPT: Final = """Это сводка с нашего внутреннего гейтвея LiteLLM {win}: статистика \
-по сотрудникам и реальные первые реплики их сессий с ИИ. Проанализируй конкретно: ЧЕМ ИМЕННО занят \
+по сотрудникам, реальные первые реплики их сессий с ИИ и ответы модели («ответ модели: …») — \
+по паре «вопрос → ответ» видно, чем реально завершился обмен. Проанализируй конкретно: ЧЕМ ИМЕННО занят \
 каждый — проекты, задачи, системы из реплик. Только по данным, не выдумай. По-русски, сразу итоговый ответ \
-без черновика. ОБЯЗАТЕЛЬНО отдельным разделом КАЖДЫЙ пользователь из блока СТАТИСТИКА (включая сервисные, \
-default_user_id и анонимных); если текстов нет — напиши «видна только статистика». Структура ответа (markdown):
-
-## Сводка
-таблица, одной строкой на участника: | Участник | Характер | Запросов | Чем занят |
-(характер: реальная работа / обучение-эксперименты / развлечения / сервисная автоматизация)
+без черновика. КАТЕГОРИЧЕСКИ ЗАПРЕЩЕНЫ любые markdown-таблицы (символы | в разметке колонок) — \
+ни сводных, ни каких-либо других; вся информация только текстом и списками. Формат ответа СТРОГО \
+(markdown):
 
 ## Имя_участника
-заголовок h2 на каждого; под ним строка **Характер: …** и 2–4 буллета конкретики \
-(проекты, задачи, системы, тон общения — только из данных)
+заголовок h2 на КАЖДОГО пользователя из блока СТАТИСТИКА (включая сервисные, default_user_id \
+и анонимных), по убыванию запросов; под ним строка **Характер: …** (реальная работа / \
+обучение-эксперименты / развлечения / сервисная автоматизация), запросы и токены текстом \
+(«запросов: N, токенов: M») и 2–4 буллета конкретики — проекты, задачи, системы из реплик; \
+если текстов нет — «видна только статистика» + вывод из моделей и числа запросов.
 
 ## Общий вывод
 3–5 строк: кто чем загружен, повторы и аномалии, заметные изменения."""
@@ -637,7 +674,7 @@ async def get_journal_window(
         _W_CTE.format(tz=_TZ, win=win)
         + f"""
 SELECT COALESCE(json_agg(r ORDER BY r.t DESC), '[]') AS data FROM (
-  SELECT to_char(lt, 'YYYY-MM-DD HH24:MI:SS') AS t, u, sid, tok, m, tags
+  SELECT to_char(lt, 'YYYY-MM-DD HH24:MI:SS') AS t, u, sid, tok, m, tags, ka
   FROM w {filt} LIMIT 500
 ) r;"""
     )
@@ -649,7 +686,7 @@ SELECT COALESCE(json_agg(r ORDER BY r.t DESC), '[]') AS data FROM (
         tags = r.get("tags") or ""
         kind = "system" if re.search(_INTERACTIVE_RE, tags, re.I) is None else "human"
         disp = _disp(r["u"], "", names)
-        out.append({"t": r["t"], "u": r["u"], "display": disp, "kind": kind, "sid": r["sid"], "tok": r["tok"], "m": r["m"]})
+        out.append({"t": r["t"], "u": r["u"], "display": disp, "kind": kind, "sid": r["sid"], "tok": r["tok"], "m": r["m"], "ka": r.get("ka") or ""})
         s = summary.setdefault(r["u"], {"u": r["u"], "display": disp, "kind": kind, "reqs": 0, "tok": 0, "sids": set()})
         s["reqs"] += 1
         s["tok"] += int(r["tok"] or 0)
@@ -685,6 +722,8 @@ def _build_digest(
         per_user[u] = per_user.get(u, 0) + 1
         disp = _disp(u, "", names)
         lines.append(f"{disp} => \"{r['txt']}\" [{r['turns']}]")
+        if r.get("atxt"):
+            lines.append(f"   ответ модели: \"{r['atxt']}\"")
     for u, n in skipped.items():
         lines.append(f"{_disp(u, '', names)} => … ещё {n} сессий (повторы)")
     return "\n".join(lines)
@@ -715,16 +754,26 @@ WITH m AS (
   SELECT string_agg(left(regexp_replace(
            CASE jsonb_typeof(m2 -> 'content')
              WHEN 'string' THEN m2 ->> 'content'
-             ELSE (SELECT string_agg(p ->> 'text', ' ') FROM jsonb_array_elements(m2 -> 'content') p
+             ELSE (SELECT string_agg(p ->> 'text', ' ') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m2 -> 'content') = 'array' THEN m2 -> 'content' ELSE '[]'::jsonb END) p
                    WHERE p ->> 'type' = 'text')
            END, '\\s+', ' ', 'g'), 400), E'\n---\n') AS txts
   FROM last, jsonb_array_elements(last.psr -> 'messages') e(m2)
   WHERE e.m2 ->> 'role' = 'user'
+), rep_a AS (
+  SELECT string_agg(left(regexp_replace(
+           CASE jsonb_typeof(m2 -> 'content')
+             WHEN 'string' THEN m2 ->> 'content'
+             ELSE (SELECT string_agg(p ->> 'text', ' ') FROM jsonb_array_elements(CASE WHEN jsonb_typeof(m2 -> 'content') = 'array' THEN m2 -> 'content' ELSE '[]'::jsonb END) p
+                   WHERE p ->> 'type' = 'text')
+           END, '\\s+', ' ', 'g'), 400), E'\n---\n') AS txts
+  FROM last, jsonb_array_elements(last.psr -> 'messages') e(m2)
+  WHERE e.m2 ->> 'role' = 'assistant'
 )
 SELECT 'сессия ' || $1 || ' | участник ' || COALESCE(nullif(uu.user_email, ''), nullif(m.u, ''), 'аноним')
   || ' | запросов ' || m.turns || ' | токенов ' || m.tok || ' | модели: ' || COALESCE(m.models, '')
-  || E'\nРЕПЛИКИ:\n' || left(COALESCE(rep.txts, '(текстов нет)'), 12000) AS dig
-FROM m LEFT JOIN "LiteLLM_UserTable" uu ON uu.user_id = m.u, rep;
+  || E'\nРЕПЛИКИ ПОЛЬЗОВАТЕЛЯ:\n' || left(COALESCE(rep.txts, '(текстов нет)'), 12000)
+  || E'\nОТВЕТЫ МОДЕЛИ:\n' || left(COALESCE(rep_a.txts, '(ответов нет)'), 8000) AS dig
+FROM m LEFT JOIN "LiteLLM_UserTable" uu ON uu.user_id = m.u, rep, rep_a;
 """
 
 
