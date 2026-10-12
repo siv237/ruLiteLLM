@@ -38,6 +38,7 @@ export default function Journal({ accessToken }: Props) {
   const [key, setKey] = useState("");
   const [data, setData] = useState<StateResponse | null>(null);
   const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [evaluations, setEvaluations] = useState<EvaluationT[]>([]);
   const [showEval, setShowEval] = useState(false);
@@ -54,6 +55,7 @@ export default function Journal({ accessToken }: Props) {
 
   const load = useCallback(async () => {
     if (!accessToken) return;
+    setRefreshing(true);
     try {
       const q = new URLSearchParams({ days: String(days) });
       if (model) q.set("model", model);
@@ -64,6 +66,8 @@ export default function Journal({ accessToken }: Props) {
       setError("");
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setRefreshing(false);
     }
   }, [accessToken, days, model, agent, key]);
 
@@ -193,14 +197,18 @@ export default function Journal({ accessToken }: Props) {
             <option value={90}>90 дней</option>
           </select>
           <button
-            className="rounded border border-input bg-background px-3 py-1.5 text-xs hover:bg-muted"
+            className="flex items-center gap-1.5 rounded border border-input bg-background px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-60"
             onClick={() => {
               load();
               loadEvals();
             }}
+            disabled={refreshing}
             title="перечитать журнал и летопись"
           >
-            ⟳ Обновить
+            <span className={`inline-block ${refreshing ? "animate-spin" : ""}`} aria-hidden>
+              ⟳
+            </span>
+            Обновить
           </button>
           <button
             className="rounded border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20"
@@ -221,8 +229,8 @@ export default function Journal({ accessToken }: Props) {
 
       {error && <div className="shrink-0 rounded border border-red-500/40 bg-red-500/10 p-2 text-xs text-red-600">{error}</div>}
 
-      <div className="grid shrink-0 gap-3 xl:grid-cols-[1.35fr_1fr]">
-        <div className="min-w-0 overflow-hidden rounded border border-input bg-card p-3">
+      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[1.35fr_1fr] xl:grid-rows-[minmax(0,1fr)]">
+        <div className="min-w-0 overflow-auto rounded border border-input bg-card p-3">
           <div className="mb-2 text-sm font-medium">Активность</div>
           {data ? (
             <Heatmap
@@ -237,8 +245,8 @@ export default function Journal({ accessToken }: Props) {
             <div className="text-xs text-muted-foreground">загрузка…</div>
           )}
         </div>
-        <div className="grid min-w-0 grid-cols-[1fr_1.2fr] gap-3">
-          <div className="grid content-start gap-2">
+        <div className="grid min-h-0 min-w-0 grid-cols-[1fr_1.2fr] gap-3 xl:grid-rows-[minmax(0,1fr)]">
+          <div className="grid h-full grid-rows-5 gap-2">
             {kpi("Запросы", t ? fnum(t.reqs) : "…", dReqs)}
             {kpi("Участники", t ? fnum(t.participants) : "…", null, "люди + системы")}
             {kpi("Люди", t ? fnum(t.people) : "…", dPeople)}
@@ -261,7 +269,7 @@ export default function Journal({ accessToken }: Props) {
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[1.35fr_1fr]">
+      <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[1.35fr_1fr] xl:grid-rows-[minmax(0,1fr)]">
         <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded border border-input bg-card p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <span className="text-sm font-medium">Участники</span>
