@@ -295,7 +295,7 @@ from litellm.repositories.table_repositories import (
     UserNotificationsRepository,
 )
 from litellm.repositories.team_repository import TeamRepository
-from litellm.repositories.user_repository import UserRepository
+from litellm.repositories.user_repository import UserRepository, sso_free_user_limit
 from litellm.repositories.verification_token_repository import (
     VerificationTokenRepository,
 )
@@ -6606,7 +6606,7 @@ class PrismaClient:
                     if new_user_row is None:
                         raise HTTPException(
                             status_code=403,
-                            detail="SSO for more than 5 users requires a LiteLLM Enterprise license. Existing users can still sign in.",
+                            detail=f"SSO for more than {sso_free_user_limit()} users requires a LiteLLM Enterprise license. Existing users can still sign in.",
                         )
                 except UniqueViolationError as e:
                     _raise_user_unique_conflict(e, db_data["user_id"], allow_existing=allow_existing_user)

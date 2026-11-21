@@ -4,6 +4,7 @@ User repository for database operations on LiteLLM_UserTable.
 
 import asyncio
 import json
+import os
 from collections.abc import Generator, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, contextmanager
 from contextvars import ContextVar
@@ -41,6 +42,18 @@ ORDER BY p.user_id
 
 _PLACEHOLDER_ROWS_ADAPTER: Final = TypeAdapter(tuple[SCIMPlaceholder, ...])
 _FREE_SSO_CREATION: Final[ContextVar[tuple[str | None, object] | None]] = ContextVar("free_sso_creation", default=None)
+
+# fork: SSO free-tier seat limit, env-configurable (upstream hardcodes 5)
+DEFAULT_SSO_FREE_USER_LIMIT: Final = 5
+
+
+def sso_free_user_limit() -> int:
+    """Max billable users allowed for SSO without an Enterprise license (env-configurable)."""
+    raw: Final = os.getenv("LITELLM_SSO_FREE_USER_LIMIT", str(DEFAULT_SSO_FREE_USER_LIMIT))
+    try:
+        return max(int(raw), 0)
+    except ValueError:
+        return DEFAULT_SSO_FREE_USER_LIMIT
 
 
 @contextmanager
@@ -189,7 +202,7 @@ class UserRepository(BaseRepository[LiteLLM_UserTable]):
             existing: Final = await transaction.litellm_usertable.find_unique(where={"user_id": data["user_id"]})
             if existing is not None:
                 return existing
-            if await _count_billable_users(transaction.litellm_usertable) >= 5:
+            if await _count_billable_users(transaction.litellm_usertable) >= sso_free_user_limit():
                 return None
             return await transaction.litellm_usertable.upsert(
                 where={"user_id": data["user_id"]}, data={"create": dict(data), "update": {}}
