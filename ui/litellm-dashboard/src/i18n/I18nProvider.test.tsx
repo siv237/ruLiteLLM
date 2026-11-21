@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import i18next, { type InitOptions } from "i18next";
 import { useState } from "react";
 import { I18nextProvider, initReactI18next, useTranslation } from "react-i18next";
@@ -63,13 +63,17 @@ describe("LanguageGate", () => {
     expect(document.documentElement.lang).toBe("ja");
   });
 
-  it.each([null, "en", "fr"])("shows English without loading anything when the stored value is %j", (stored) => {
+  it.each([
+    [null, "ru-RU"],
+    ["en", "en"],
+    ["fr", "ru-RU"],
+  ])("shows English text without loading anything when the stored value is %j", async (stored, expectedLang) => {
     const load = vi.fn(async () => japanese);
     renderGate(stored, new Map([["ja", load]]));
 
     expect(screen.getByTestId("logout")).toHaveTextContent(en.shell.sidebarAccountMenu.logout);
     expect(load).not.toHaveBeenCalled();
-    expect(document.documentElement.lang).toBe("en");
+    await waitFor(() => expect(document.documentElement.lang).toBe(expectedLang));
   });
 
   it("falls back to English when the translations fail to load", async () => {
@@ -78,5 +82,25 @@ describe("LanguageGate", () => {
 
     expect(await screen.findByTestId("logout")).toHaveTextContent(en.shell.sidebarAccountMenu.logout);
     expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("never strands English behind a pending bundle when the snapshot flips to en", () => {
+    let readCount = 0;
+    const neverResolving: Promise<Messages> = new Promise(() => undefined);
+    const instance = createI18n();
+    const tree = () => (
+      <I18nextProvider i18n={instance}>
+        <LanguageGate
+          i18n={instance}
+          locales={new Map([["ja", () => neverResolving]])}
+          store={{ read: () => (++readCount === 1 ? "ja" : "en"), write: vi.fn() }}
+        >
+          <p>child-ok</p>
+        </LanguageGate>
+      </I18nextProvider>
+    );
+    const { rerender } = render(tree());
+    rerender(tree());
+    expect(screen.getByText("child-ok")).toBeInTheDocument();
   });
 });
