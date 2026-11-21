@@ -1,7 +1,6 @@
 export const productNames = {
   liteLLM: "LiteLLM",
   ruLiteLLM: "ruLiteLLM",
-  liteLLMWithLogo: "🚅 ruLiteLLM",
   liteLLMProxy: "LiteLLM Proxy",
   liteLLMMcpOAuth: "LiteLLM MCP OAuth",
   moyai: "Moyai",
