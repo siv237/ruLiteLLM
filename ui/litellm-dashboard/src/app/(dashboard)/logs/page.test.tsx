@@ -23,9 +23,9 @@ vi.mock("@/components/logs/request/RequestLogsPanel", () => ({
   },
 }));
 
-vi.mock("@/components/logs/audit/AuditLogsPanel", () => ({
-  default: function AuditLogsPanelMock({ isActive }: { isActive: boolean }) {
-    return <div data-testid="audit-logs-panel">{isActive ? "active" : "inactive"}</div>;
+vi.mock("@/app/(dashboard)/journal/_components", () => ({
+  default: function JournalMock() {
+    return <div data-testid="journal" />;
   },
 }));
 
@@ -65,10 +65,10 @@ describe("LogsPage", () => {
     useOrganizationsMock.mockReturnValue({ data: [] });
   });
 
-  it("keeps request and audit logs here while traces live in Lens", () => {
+  it("keeps request logs and our activity journal here while traces live in Lens", () => {
     renderAs("Admin");
 
-    for (const label of ["Request Logs", "Audit Logs", "Deleted Keys", "Deleted Teams"]) {
+    for (const label of ["Request Logs", "Activity Journal", "Deleted Keys", "Deleted Teams"]) {
       expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
     }
     expect(screen.queryByRole("tab", { name: /Agent Traces/ })).not.toBeInTheDocument();
@@ -81,26 +81,26 @@ describe("LogsPage", () => {
 
     expect(screen.getByTestId("request-logs-panel")).toHaveTextContent("active");
 
-    await user.click(screen.getByRole("tab", { name: "Audit Logs" }));
+    await user.click(screen.getByRole("tab", { name: "Activity Journal" }));
 
-    expect(await screen.findByTestId("audit-logs-panel")).toHaveTextContent("active");
+    expect(await screen.findByTestId("journal")).toBeInTheDocument();
     expect(screen.getByTestId("request-logs-panel")).toHaveTextContent("inactive");
   });
 
   describe("admin-only tabs", () => {
-    it.each(["Internal User", "Internal Viewer"])("hides Audit Logs and Deleted Teams from %s", (role) => {
+    it.each(["Internal User", "Internal Viewer"])("hides Activity Journal and Deleted Teams from %s", (role) => {
       renderAs(role);
 
       expect(screen.getByRole("tab", { name: "Request Logs" })).toBeInTheDocument();
       expect(screen.getByRole("tab", { name: "Deleted Keys" })).toBeInTheDocument();
-      expect(screen.queryByRole("tab", { name: "Audit Logs" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("tab", { name: "Activity Journal" })).not.toBeInTheDocument();
       expect(screen.queryByRole("tab", { name: "Deleted Teams" })).not.toBeInTheDocument();
     });
 
     it("never mounts the panels that call the admin-only endpoints for an internal user", () => {
       renderAs("Internal User");
 
-      expect(screen.queryByTestId("audit-logs-panel")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("journal")).not.toBeInTheDocument();
       expect(screen.queryByTestId("deleted-teams-page")).not.toBeInTheDocument();
       expect(screen.getByTestId("deleted-keys-page")).toBeInTheDocument();
     });
@@ -114,11 +114,11 @@ describe("LogsPage", () => {
       expect(screen.getByTestId("deleted-teams-page")).toBeInTheDocument();
     });
 
-    it("does not hand an org admin the Audit Logs tab, which the backend still refuses them", () => {
+    it("does not hand an org admin the Activity Journal tab, which is proxy-admin only", () => {
       renderAs("Internal User", ORG_ADMIN_MEMBERSHIPS);
 
       expect(tabNames()).toEqual(["Request Logs", "Deleted Keys", "Deleted Teams"]);
-      expect(screen.queryByTestId("audit-logs-panel")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("journal")).not.toBeInTheDocument();
     });
 
     it("keeps an internal user in the same org without an org_admin membership at two tabs", () => {
@@ -151,17 +151,17 @@ describe("LogsPage", () => {
 
       await user.click(screen.getByRole("tab", { name: "Deleted Keys" }));
 
-      expect(screen.getByTestId("audit-logs-panel")).toHaveTextContent("inactive");
+      expect(screen.getByTestId("journal")).toBeInTheDocument();
       expect(screen.getByTestId("request-logs-panel")).toHaveTextContent("inactive");
     });
 
-    it("keeps the audit panel inert when an admin selects the last tab", async () => {
+    it("keeps the journal mounted inert when an admin selects the last tab", async () => {
       const user = userEvent.setup();
       renderAs("Admin");
 
       await user.click(screen.getByRole("tab", { name: "Deleted Teams" }));
 
-      expect(screen.getByTestId("audit-logs-panel")).toHaveTextContent("inactive");
+      expect(screen.getByTestId("journal")).toBeInTheDocument();
       expect(screen.getByTestId("deleted-teams-page")).toBeInTheDocument();
     });
 
