@@ -1,4 +1,5 @@
 import { SidebarBrand } from "@/components/shared/SidebarBrand";
+import { productNames } from "@/i18n/untranslated/productNames";
 import { canViewProjectsPage, projectReaderRoles } from "@/app/(dashboard)/hooks/projects/projectAccess";
 import { useTeams } from "@/app/(dashboard)/hooks/teams/useTeams";
 import useAuthorized from "@/app/(dashboard)/hooks/useAuthorized";
@@ -28,6 +29,7 @@ import {
   BookOpen,
   Building2,
   Boxes,
+  ChartGantt,
   ChevronRight,
   Code2,
   Database,
@@ -35,6 +37,7 @@ import {
   FileText,
   FlaskConical,
   Folder,
+  Gauge,
   HeartPulse,
   House,
   KeyRound,
@@ -297,6 +300,13 @@ const menuGroups: MenuGroup[] = [
     groupLabel: "OBSERVABILITY",
     items: [
       {
+        key: "monitoring",
+        page: "monitoring",
+        label: "shell.nav.items.monitoring",
+        icon: <Gauge {...ICON} />,
+        roles: [...all_admin_roles],
+      },
+      {
         key: "new_usage",
         page: "new_usage",
         route: "usage",
@@ -330,6 +340,13 @@ const menuGroups: MenuGroup[] = [
         label: "shell.nav.items.costOptimization",
       },
       { key: "logs", page: "logs", label: "shell.nav.items.logs", icon: <Activity {...ICON} /> },
+      {
+        key: "request-gantt",
+        page: "request-gantt",
+        label: "shell.nav.items.requestGantt",
+        icon: <ChartGantt {...ICON} />,
+        roles: [...all_admin_roles, ...internalUserRoles],
+      },
       {
         key: "lens",
         page: "lens",
@@ -744,7 +761,7 @@ const Sidebar_: React.FC<SidebarProps> = ({
     <Sidebar collapsed={collapsed}>
       <SidebarBrand
         accessToken={accessToken}
-        homeLabel={t("shell.nav.homeLink")}
+        homeLabel={productNames.ruLiteLLM}
         collapsed={collapsed}
         onToggleCollapsed={onToggleCollapsed}
       />

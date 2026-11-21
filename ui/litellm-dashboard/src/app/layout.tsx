@@ -12,12 +12,12 @@ import { TerminologyProvider } from "@/contexts/TerminologyContext";
 import { Toaster } from "@/components/ui/sonner";
 import I18nProvider from "@/i18n/I18nProvider";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ subsets: ["latin", "cyrillic", "cyrillic-ext"] });
 
 export const metadata: Metadata = {
-  title: "LiteLLM Dashboard",
-  description: "LiteLLM Proxy Admin UI",
-  icons: { icon: "/get_favicon" },
+  title: "ruLiteLLM",
+  description: "ruLiteLLM proxy admin UI",
+  icons: { icon: "/ui/assets/logos/rulitellm_mark.png" },
 };
 
 export default function RootLayout({

@@ -482,6 +482,66 @@
       "count": 1
     }
   },
+  "src/app/(dashboard)/journal/_components/detailModal.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    },
+    "local/no-ad-hoc-z-index": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
+  "src/app/(dashboard)/journal/_components/evalList.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    },
+    "local/no-ad-hoc-z-index": {
+      "count": 1
+    }
+  },
+  "src/app/(dashboard)/journal/_components/evaluate.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    },
+    "local/no-ad-hoc-z-index": {
+      "count": 1
+    },
+    "no-nested-ternary": {
+      "count": 4
+    },
+    "react-hooks/purity": {
+      "count": 2
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 2
+    }
+  },
+  "src/app/(dashboard)/journal/_components/heatmap.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    }
+  },
+  "src/app/(dashboard)/journal/_components/index.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    },
+    "local/no-complex-jsx-arrow": {
+      "count": 3
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 3
+    }
+  },
+  "src/app/(dashboard)/journal/_components/userView.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    }
+  },
   "src/app/(dashboard)/mcp-servers/_components/CreateMCPServer.tsx": {
     "max-lines": {
       "count": 1
@@ -625,6 +685,26 @@
   },
   "src/app/(dashboard)/models-and-endpoints/components/ModelRetrySettingsTab.tsx": {
     "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/app/(dashboard)/monitoring/_components/index.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    },
+    "local/no-ad-hoc-z-index": {
+      "count": 2
+    },
+    "max-params": {
+      "count": 1
+    },
+    "no-nested-ternary": {
+      "count": 4
+    },
+    "react-hooks/refs": {
+      "count": 1
+    },
+    "react-hooks/set-state-in-effect": {
       "count": 1
     }
   },
@@ -1005,6 +1085,32 @@
   },
   "src/app/(dashboard)/prompts/_components/variable_textarea.tsx": {
     "local/filename-pascal-case": {
+      "count": 1
+    }
+  },
+  "src/app/(dashboard)/request-gantt/_components/index.tsx": {
+    "local/filename-pascal-case": {
+      "count": 1
+    },
+    "local/no-ad-hoc-z-index": {
+      "count": 1
+    },
+    "local/no-complex-jsx-arrow": {
+      "count": 3
+    },
+    "no-nested-ternary": {
+      "count": 4
+    },
+    "react-hooks/purity": {
+      "count": 2
+    },
+    "react-hooks/refs": {
+      "count": 2
+    },
+    "react-hooks/set-state-in-effect": {
+      "count": 1
+    },
+    "react/no-danger": {
       "count": 1
     }
   },
