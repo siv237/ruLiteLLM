@@ -7,7 +7,7 @@ import { I18nextProvider } from "react-i18next";
 import LoadingScreen from "@/components/common_components/LoadingScreen";
 
 import i18n from "./i18n";
-import { browserLanguageStore, DEFAULT_LANGUAGE, LanguageStore, Locales, LOCALES, resolveLanguage } from "./languages";
+import { browserLanguageStore, DEFAULT_UI_LANGUAGE, LanguageStore, Locales, LOCALES, resolveLanguage } from "./languages";
 
 type LanguageGateProps = {
   i18n: I18n;
@@ -22,13 +22,16 @@ export function LanguageGate({ i18n, locales, store, children }: LanguageGatePro
   const language = useSyncExternalStore(
     neverChanges,
     () => resolveLanguage(store.read(), locales),
-    () => DEFAULT_LANGUAGE,
+    () => DEFAULT_UI_LANGUAGE,
   );
-  const [settled, setSettled] = useState(DEFAULT_LANGUAGE);
+  const [settled, setSettled] = useState<string | null>(null);
 
   useEffect(() => {
     const load = locales.get(language);
-    if (!load) return;
+    if (!load) {
+      setSettled(language);
+      return;
+    }
     load()
       .then((messages) => {
         i18n.addResourceBundle(language, "translation", messages);

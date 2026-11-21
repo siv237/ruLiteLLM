@@ -5,6 +5,8 @@ export type Locales = ReadonlyMap<string, () => Promise<Messages>>;
 export type LanguageStore = { readonly read: () => string | null; readonly write: (language: string) => void };
 
 export const DEFAULT_LANGUAGE = "en";
+// fork: новый пользователь без сохранённого выбора видит русский
+export const DEFAULT_UI_LANGUAGE = "ru-RU";
 export const LANGUAGE_STORAGE_KEY = "litellm_language";
 
 export const LOCALES: Locales = new Map([
@@ -16,8 +18,8 @@ export const browserLanguageStore: LanguageStore = {
   write: (language) => setLocalStorageItem(LANGUAGE_STORAGE_KEY, language),
 };
 
-export const resolveLanguage = (stored: string | null, locales: Locales): string =>
-  stored !== null && locales.has(stored) ? stored : DEFAULT_LANGUAGE;
+export const resolveLanguage = (stored: string | null, locales: Locales, fallback: string = DEFAULT_UI_LANGUAGE): string =>
+  stored === DEFAULT_LANGUAGE || (stored !== null && locales.has(stored)) ? stored : fallback;
 
 export const supportedLanguages = (locales: Locales): readonly string[] => [DEFAULT_LANGUAGE, ...locales.keys()];
 

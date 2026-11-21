@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { englishName, Locales, nativeName, resolveLanguage, supportedLanguages } from "./languages";
+import { DEFAULT_LANGUAGE, DEFAULT_UI_LANGUAGE, englishName, Locales, nativeName, resolveLanguage, supportedLanguages } from "./languages";
 
 const locales: Locales = new Map([["ja", async () => ({})]]);
 
@@ -9,12 +9,16 @@ describe("resolveLanguage", () => {
     expect(resolveLanguage("ja", locales)).toBe("ja");
   });
 
-  it.each([null, "", "en", "fr", "JA", "ja-JP", "__proto__"])("shows English when the stored value is %j", (stored) => {
-    expect(resolveLanguage(stored, locales)).toBe("en");
+  it("keeps English when it is explicitly stored", () => {
+    expect(resolveLanguage(DEFAULT_LANGUAGE, locales)).toBe(DEFAULT_LANGUAGE);
   });
 
-  it("shows English when no language besides English has translations", () => {
-    expect(resolveLanguage("ja", new Map())).toBe("en");
+  it.each([null, "", "fr", "JA", "ja-JP", "__proto__"])("falls back to the fork default when the stored value is %j", (stored) => {
+    expect(resolveLanguage(stored, locales)).toBe(DEFAULT_UI_LANGUAGE);
+  });
+
+  it("honours an explicit fallback argument", () => {
+    expect(resolveLanguage("fr", locales, DEFAULT_LANGUAGE)).toBe(DEFAULT_LANGUAGE);
   });
 });
 

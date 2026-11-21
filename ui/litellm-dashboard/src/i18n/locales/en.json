@@ -8448,10 +8448,10 @@
     },
     "form": {
       "title": "Login",
-      "subtitle": "Access your LiteLLM Admin UI.",
+      "subtitle": "Access your ruLiteLLM Admin UI. ",
       "defaultCredentials": {
         "title": "Default Credentials",
-        "body": "By default, Username is <username/> and Password is your set LiteLLM Proxy<masterkey/>.",
+        "body": "By default, Username is <username/> and Password is your set ruLiteLLM Proxy<masterkey/>. ",
         "help": "Need to set UI credentials or SSO? <docs>Check the documentation</docs>."
       },
       "worker": {
@@ -8542,7 +8542,7 @@
       "usageAria": "Usage, last {{days}} days",
       "usageFailed": "Failed to load usage",
       "retry": "Retry",
-      "whatsNew": "What's new in LiteLLM?",
+      "whatsNew": "What's new in ruLiteLLM? ",
       "leaderboard": {
         "title": "Leaderboard",
         "subtitle": "Share of tokens over the last {{days}} days, with the change between the first and second half of the period"
