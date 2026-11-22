@@ -22,6 +22,9 @@ _EXEMPT_PATHS: Final[frozenset[str]] = frozenset(
         "/health/readiness/details",
         "/health/backlog",
         "/health/drain",
+        "/dashboard/state",
+        "/dashboard/abort",
+        "/gantt",
         "/metrics",
         "/metrics/",
     }

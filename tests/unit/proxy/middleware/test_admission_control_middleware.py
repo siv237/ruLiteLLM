@@ -163,6 +163,9 @@ async def test_queue_timeout_rejects_and_decrements_queue(state: AdmissionContro
     (
         ("", "/health/liveliness"),
         ("/proxy", "/proxy/health/liveliness"),
+        ("", "/dashboard/abort"),
+        ("", "/dashboard/state"),
+        ("/proxy", "/proxy/gantt"),
         ("/proxy", "/proxy/metrics"),
     ),
 )
