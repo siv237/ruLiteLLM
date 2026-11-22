@@ -9649,3 +9649,82 @@ def test_chunk_creator_usage_only_chunk_with_dict_usage_keeps_details(
     assert usage.prompt_tokens_details.cached_tokens == 80
     assert usage.completion_tokens_details is not None
     assert usage.completion_tokens_details.reasoning_tokens == 5
+
+
+# fork: политика приватности доставки on_stream_chunk (порт фиксов из PR upstream)
+class _ForkChunkCollector(CustomLogger):
+    def __init__(self) -> None:
+        self.contents: list = []
+
+    def on_stream_chunk(self, request_data, chunk) -> None:
+        self.contents.append(chunk.choices[0].delta.content or "")
+
+
+class _ForkOptedOutCollector(_ForkChunkCollector):
+    message_logging = False
+
+
+def _fork_text_chunks():
+    return [
+        ModelResponseStream(
+            id="c1", created=1, model=None, object="chat.completion.chunk",
+            choices=[StreamingChoices(index=0, delta=Delta(role="assistant", content="a"))],
+        ),
+        ModelResponseStream(
+            id="c1", created=1, model=None, object="chat.completion.chunk",
+            choices=[StreamingChoices(index=0, delta=Delta(content="b"))],
+        ),
+        ModelResponseStream(
+            id="c1", created=1, model=None, object="chat.completion.chunk",
+            choices=[StreamingChoices(index=0, delta=Delta(), finish_reason="stop")],
+        ),
+    ]
+
+
+def _fork_stream_wrapper(logging_obj: Logging) -> CustomStreamWrapper:
+    return CustomStreamWrapper(
+        completion_stream=ModelResponseListIterator(model_responses=_fork_text_chunks()),
+        model="gpt-3.5-turbo",
+        custom_llm_provider="openai",
+        logging_obj=logging_obj,
+    )
+
+
+def _fork_logging() -> Logging:
+    return Logging(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": "hi"}],
+        stream=True,
+        call_type="completion",
+        start_time=1.0,
+        litellm_call_id="fork-privacy-test",
+        function_id="test",
+    )
+
+
+@pytest.mark.asyncio
+async def test_fork_on_stream_chunk_skipped_for_no_log(monkeypatch):
+    collector = _ForkChunkCollector()
+    monkeypatch.setattr(litellm, "callbacks", [collector])
+    logging_obj = _fork_logging()
+    logging_obj.model_call_details["litellm_params"]["no-log"] = True
+    wrapper = _fork_stream_wrapper(logging_obj)
+
+    chunks = [chunk async for chunk in wrapper]
+
+    assert len(chunks) == 3
+    assert collector.contents == []
+
+
+@pytest.mark.asyncio
+async def test_fork_on_stream_chunk_redacts_for_opted_out_logger(monkeypatch):
+    from litellm.constants import REDACTED_BY_LITELLM
+
+    collector = _ForkOptedOutCollector()
+    monkeypatch.setattr(litellm, "callbacks", [collector])
+    wrapper = _fork_stream_wrapper(_fork_logging())
+
+    chunks = [chunk async for chunk in wrapper]
+
+    assert collector.contents == [REDACTED_BY_LITELLM, REDACTED_BY_LITELLM, ""]
+    assert [chunk.choices[0].delta.content for chunk in chunks[:2]] == ["a", "b"]
