@@ -872,8 +872,12 @@ async def post_journal_evaluate(
             prompt = _EVAL_PROMPT.format(win=win_txt)
         prompt = prompt + "\n\n" + digest
 
-    base = os.environ.get("LITELLM_SELF_BASE", "https://dgk00srv937d.dgk.ru")
+    base = (os.environ.get("LITELLM_SELF_BASE") or "").rstrip("/")
     master = os.environ.get("LITELLM_MASTER_KEY", "")
+    if not base:
+        raise HTTPException(
+            status_code=503, detail={"error": "LITELLM_SELF_BASE не задан (например http://127.0.0.1:4000)"}
+        )
     t0 = time.time()
     report = ""
     error = ""
