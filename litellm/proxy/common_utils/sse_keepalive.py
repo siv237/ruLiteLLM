@@ -11,6 +11,14 @@ from litellm.constants import STREAM_SSE_KEEPALIVE_PING_CHUNK
 ANTHROPIC_PING_SSE_CHUNK: Final = STREAM_SSE_KEEPALIVE_PING_CHUNK
 SSE_COMMENT_PING: Final = ": ping\n\n"
 SSE_COMMENT_PING_BYTES: Final = SSE_COMMENT_PING.encode()
+# Chat completions clients (KiloCode/ai-sdk) anchor their stream timer to parsed data
+# frames with content and discard SSE comments, so the heartbeat for that protocol must
+# be a real delta frame. A single space appends nothing a client can mistake for an answer.
+SSE_DUMMY_DELTA_FRAME: Final = (
+    'data: {"id":"litellm-keepalive","object":"chat.completion.chunk","created":0,'
+    '"model":"","choices":[{"index":0,"delta":{"content":" "},"finish_reason":null}]}\n\n'
+)
+SSE_DUMMY_DELTA_FRAME_BYTES: Final = SSE_DUMMY_DELTA_FRAME.encode()
 # The byte form of proxy_server._SSE_FRAME_DELIMITERS, CR-only included: SSE
 # terminates a line with CRLF, LF or CR, so a blank line is any of these three.
 _SSE_FRAME_DELIMITERS: Final = (b"\r\n\r\n", b"\n\n", b"\r\r")
