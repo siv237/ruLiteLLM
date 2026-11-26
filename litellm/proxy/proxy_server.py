@@ -10592,6 +10592,14 @@ def _pop_complete_sse_frame(buffer: str) -> tuple[str | None, str]:
 
 _STREAM_KEEPALIVE: Final = object()
 
+# A real OpenAI delta frame with empty content. SSE comments (": ping") are discarded by
+# streaming clients without resetting their per-request timers, so an idle-gap heartbeat
+# must be a data frame the client parses as a chunk. Empty delta appends nothing to the answer.
+_KEEPALIVE_DUMMY_FRAME: Final = (
+    'data: {"id":"litellm-keepalive","object":"chat.completion.chunk","created":0,'
+    '"model":"","choices":[{"index":0,"delta":{},"finish_reason":null}]}\n\n'
+)
+
 _KEEPALIVE_MIN_SECONDS: Final = 1.0
 _STREAM_LOOP_HOLD_SECONDS: Final = 0.05
 _KEEPALIVE_MAX_SECONDS: Final = 300.0
@@ -10904,7 +10912,7 @@ async def async_data_generator(
                 loop_released_at = time.monotonic()
             if item is _STREAM_KEEPALIVE:
                 stream_started = True
-                yield ": ping\n\n"
+                yield _KEEPALIVE_DUMMY_FRAME
                 continue
             chunk = item
             if needs_per_chunk_hook:
