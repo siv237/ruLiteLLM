@@ -136,7 +136,7 @@ from litellm.proxy.common_utils.responses_stream_errors import (
     sse_error_object,
 )
 from litellm.proxy.common_utils.sse_keepalive import (
-    SSE_DUMMY_DELTA_FRAME_BYTES,
+    SSE_COMMENT_PING_BYTES,
     SSE_STREAM_START_TAIL,
     advance_sse_tail,
     coerce_keepalive_interval,
@@ -1724,7 +1724,7 @@ async def open_sse_before_first_byte(
     async def keepalive_then_relay() -> AsyncGenerator[bytes, None]:
         try:
             while not produce_task.done():
-                yield SSE_DUMMY_DELTA_FRAME_BYTES
+                yield SSE_COMMENT_PING_BYTES
                 await asyncio.wait((produce_task,), timeout=interval)
             try:
                 produced: Final = produce_task.result()
